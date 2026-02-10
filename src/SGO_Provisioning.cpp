@@ -249,6 +249,13 @@ bool SGO_Provisioning::launchPortal(
     WiFi.mode(WIFI_AP);
     delay(100);
 
+    // Lower TX power for ESP32-C3 boards (many have inadequate power supply
+    // design that prevents WiFi from working at default 19.5dBm)
+#if CONFIG_IDF_TARGET_ESP32C3
+    WiFi.setTxPower(WIFI_POWER_8_5dBm);
+    delay(100);
+#endif
+
     if (apPassword != nullptr && strlen(apPassword) >= 8) {
         WiFi.softAP(apSSID, apPassword);
     } else {

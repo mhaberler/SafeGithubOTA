@@ -14,7 +14,7 @@ bool SGO_Updater::beginUpdate(uint32_t size) {
 }
 
 size_t SGO_Updater::writeChunk(const uint8_t* data, size_t len) {
-    size_t written = Update.write(data, len);
+    size_t written = Update.write(const_cast<uint8_t*>(data), len);
     if (written != len) {
         Serial.printf("[SafeGithubOTA] Update.write failed: %s\n", Update.errorString());
     }

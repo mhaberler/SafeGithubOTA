@@ -2,6 +2,10 @@
 #include "SGO_CACert.h"
 #include <WiFiClientSecure.h>
 
+// ESP32 built-in certificate bundle (covers GitHub, Amazon S3, etc.)
+extern const uint8_t rootca_crt_bundle_start[] asm("_binary_x509_crt_bundle_start");
+extern const uint8_t rootca_crt_bundle_end[] asm("_binary_x509_crt_bundle_end");
+
 #define SGO_CHUNK_SIZE 4096
 #define SGO_GITHUB_HOST "api.github.com"
 #define SGO_GITHUB_PORT 443
@@ -310,14 +314,25 @@ bool SGO_GitHubClient::fetchLatestRelease(
     releaseInfo.found = false;
 
     WiFiClientSecure client;
-    client.setCACert(SGO_DIGICERT_ROOT_CA);
+    client.setCACertBundle(rootca_crt_bundle_start, rootca_crt_bundle_end - rootca_crt_bundle_start);
     client.setTimeout(_connectTimeoutMs / 1000);
 
     Serial.printf("[SafeGithubOTA] Connecting to %s...\n", SGO_GITHUB_HOST);
 
     if (!client.connect(SGO_GITHUB_HOST, SGO_GITHUB_PORT)) {
-        _setError("Failed to connect to %s", SGO_GITHUB_HOST);
-        return false;
+        char errBuf[128];
+        int errCode = client.lastError(errBuf, sizeof(errBuf));
+        Serial.printf("[SafeGithubOTA] TLS error %d: %s\n", errCode, errBuf);
+
+        // Retry with embedded DigiCert root CA as fallback
+        Serial.println("[SafeGithubOTA] Retrying with embedded CA cert...");
+        client.setCACert(SGO_DIGICERT_ROOT_CA);
+        if (!client.connect(SGO_GITHUB_HOST, SGO_GITHUB_PORT)) {
+            errCode = client.lastError(errBuf, sizeof(errBuf));
+            Serial.printf("[SafeGithubOTA] TLS error %d: %s\n", errCode, errBuf);
+            _setError("Failed to connect to %s", SGO_GITHUB_HOST);
+            return false;
+        }
     }
 
     // Build request
@@ -412,7 +427,7 @@ bool SGO_GitHubClient::downloadAsset(
     }
 
     WiFiClientSecure client;
-    client.setCACert(SGO_DIGICERT_ROOT_CA);
+    client.setCACertBundle(rootca_crt_bundle_start, rootca_crt_bundle_end - rootca_crt_bundle_start);
     client.setTimeout(_connectTimeoutMs / 1000);
 
     Serial.println("[SafeGithubOTA] Requesting asset download...");
@@ -463,18 +478,12 @@ bool SGO_GitHubClient::downloadAsset(
     }
 
     WiFiClientSecure s3Client;
-    // The redirect usually goes to objects.githubusercontent.com which may
-    // chain through DigiCert or Amazon CAs. Try DigiCert first, then Amazon.
-    s3Client.setCACert(SGO_DIGICERT_ROOT_CA);
+    s3Client.setCACertBundle(rootca_crt_bundle_start, rootca_crt_bundle_end - rootca_crt_bundle_start);
     s3Client.setTimeout(_downloadTimeoutMs / 1000);
 
     if (!s3Client.connect(s3Host.c_str(), s3Port)) {
-        // Retry with Amazon root CA
-        s3Client.setCACert(SGO_AMAZON_ROOT_CA);
-        if (!s3Client.connect(s3Host.c_str(), s3Port)) {
-            _setError("Failed to connect to %s for binary download", s3Host.c_str());
-            return false;
-        }
+        _setError("Failed to connect to %s for binary download", s3Host.c_str());
+        return false;
     }
 
     // CRITICAL: No Authorization header for the S3 request

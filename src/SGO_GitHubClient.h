@@ -2,6 +2,7 @@
 #define SGO_GITHUB_CLIENT_H
 
 #include <Arduino.h>
+#include <WiFiClientSecure.h>
 #include <functional>
 
 struct SGO_ReleaseInfo {

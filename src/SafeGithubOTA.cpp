@@ -4,6 +4,7 @@
 #include "SGO_Updater.h"
 #include "SGO_Semver.h"
 #include <WiFi.h>
+#include <time.h>
 
 SafeGithubOTA::SafeGithubOTA()
     : _lastError(SGO_Error::OK)
@@ -100,6 +101,30 @@ SGO_Error SafeGithubOTA::begin() {
     SGO_Error valResult = _handleValidation();
     if (valResult != SGO_Error::OK) {
         return valResult;
+    }
+
+    // Sync time via NTP (required for TLS certificate validation)
+    if (WiFi.status() == WL_CONNECTED) {
+        _log("Syncing time via NTP...");
+        configTime(0, 0, "pool.ntp.org", "time.nist.gov");
+
+        // Wait up to 10 seconds for time to sync
+        time_t now = 0;
+        for (int i = 0; i < 20; i++) {
+            time(&now);
+            if (now > 1700000000) break;  // Reasonable timestamp (after 2023)
+            delay(500);
+        }
+
+        if (now > 1700000000) {
+            struct tm timeinfo;
+            gmtime_r(&now, &timeinfo);
+            _log("Time synced: %04d-%02d-%02d %02d:%02d:%02d UTC",
+                 timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday,
+                 timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
+        } else {
+            _log("WARNING: NTP time sync failed. TLS connections may fail.");
+        }
     }
 
     // Initialize auto-check timer
