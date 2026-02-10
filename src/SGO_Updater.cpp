@@ -2,6 +2,13 @@
 #include <Update.h>
 #include "esp_ota_ops.h"
 
+// Override Arduino core's weak verifyRollbackLater() so it does NOT
+// auto-confirm new firmware during initArduino(). This lets SafeGithubOTA's
+// begin() handle validation via the user's callback instead.
+bool verifyRollbackLater() {
+    return true;
+}
+
 bool SGO_Updater::beginUpdate(uint32_t size) {
     if (size == 0) {
         size = UPDATE_SIZE_UNKNOWN;
