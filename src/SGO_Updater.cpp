@@ -2,6 +2,15 @@
 #include <Update.h>
 #include "esp_ota_ops.h"
 
+// Override the Arduino core's weak verifyRollbackLater() (defined in
+// esp32-hal-misc.c with C linkage) so initArduino() does NOT auto-confirm
+// new OTA firmware. This defers verification to SafeGithubOTA::begin(),
+// which runs the user's validation callback.
+// extern "C" is required because the weak symbol has C linkage.
+extern "C" bool verifyRollbackLater() {
+    return true;
+}
+
 bool SGO_Updater::beginUpdate(uint32_t size) {
     if (size == 0) {
         size = UPDATE_SIZE_UNKNOWN;
