@@ -27,6 +27,10 @@ public:
     // This function does not return on success.
     static bool rollbackAndReboot();
 
+    // Check if device just rolled back from a failed OTA update.
+    // Returns true if the non-running OTA partition is in INVALID state.
+    static bool didRollback();
+
     // Get human-readable error from last Update operation.
     static const char* getUpdateError();
 };

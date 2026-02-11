@@ -137,6 +137,10 @@ public:
     // True if current boot is first boot after OTA (pending verification).
     bool isPendingVerification() const;
 
+    // True if device rolled back from a failed OTA update.
+    // Check after begin() returns.
+    bool wasRolledBack() const;
+
     // ---- Getters ----
 
     const char* getVersion() const;
@@ -157,6 +161,8 @@ private:
     uint32_t _lastCheckMs;
     uint32_t _connectTimeoutMs;
     uint32_t _downloadTimeoutMs;
+
+    bool     _rolledBack;
 
     // Cached from last checkForUpdate()
     bool     _updateAvailable;

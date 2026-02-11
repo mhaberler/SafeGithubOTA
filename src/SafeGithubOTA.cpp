@@ -12,6 +12,7 @@ SafeGithubOTA::SafeGithubOTA()
     , _lastCheckMs(0)
     , _connectTimeoutMs(10000)
     , _downloadTimeoutMs(120000)
+    , _rolledBack(false)
     , _updateAvailable(false)
     , _assetSize(0)
 {
@@ -96,6 +97,12 @@ SGO_Error SafeGithubOTA::begin() {
     }
 
     _log("SafeGithubOTA v%s starting", _version);
+
+    // Check if we just rolled back from a failed update
+    _rolledBack = SGO_Updater::didRollback();
+    if (_rolledBack) {
+        _log("Detected rollback from a failed OTA update");
+    }
 
     // Handle post-OTA validation
     SGO_Error valResult = _handleValidation();
@@ -375,6 +382,10 @@ SGO_Error SafeGithubOTA::rollback() {
 
 bool SafeGithubOTA::isPendingVerification() const {
     return SGO_Updater::isPendingVerification();
+}
+
+bool SafeGithubOTA::wasRolledBack() const {
+    return _rolledBack;
 }
 
 // ============================================================

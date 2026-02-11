@@ -59,10 +59,28 @@ bool SGO_Updater::confirmFirmware() {
 
 bool SGO_Updater::rollbackAndReboot() {
     Serial.println("[SafeGithubOTA] Rolling back to previous firmware...");
+    Serial.flush();
+    delay(100);
     esp_err_t err = esp_ota_mark_app_invalid_rollback_and_reboot();
     // If we reach here, rollback failed
     Serial.printf("[SafeGithubOTA] Rollback failed: %s\n", esp_err_to_name(err));
     return false;
+}
+
+bool SGO_Updater::didRollback() {
+    // Find the non-running OTA partition and check if it's INVALID,
+    // which indicates we just rolled back from a failed update.
+    const esp_partition_t* running = esp_ota_get_running_partition();
+    if (running == nullptr) return false;
+
+    // Get the "next" OTA partition (the one we're NOT running from)
+    const esp_partition_t* other = esp_ota_get_next_update_partition(running);
+    if (other == nullptr) return false;
+
+    esp_ota_img_states_t state;
+    if (esp_ota_get_state_partition(other, &state) != ESP_OK) return false;
+
+    return (state == ESP_OTA_IMG_INVALID || state == ESP_OTA_IMG_ABORTED);
 }
 
 const char* SGO_Updater::getUpdateError() {
