@@ -173,7 +173,6 @@ private:
     void _log(const char* fmt, ...);
     SGO_Error _setError(SGO_Error code, const char* msg);
     SGO_Error _handleValidation();
-    SGO_Error _doCheckAndUpdate();
 };
 
 #endif // SAFE_GITHUB_OTA_H

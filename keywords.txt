@@ -33,6 +33,7 @@ setDownloadTimeout	KEYWORD2
 confirmFirmware	KEYWORD2
 rollback	KEYWORD2
 isPendingVerification	KEYWORD2
+wasRolledBack	KEYWORD2
 getVersion	KEYWORD2
 getLastError	KEYWORD2
 getLastErrorCode	KEYWORD2

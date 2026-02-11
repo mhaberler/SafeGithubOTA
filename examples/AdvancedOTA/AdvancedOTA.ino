@@ -2,12 +2,18 @@
  * SafeGithubOTA - Advanced Example
  *
  * Demonstrates:
+ * - WiFiManager for easy WiFi configuration (no hardcoded credentials)
  * - All callback types (validation, progress, update available, logging)
  * - Serial command interface for manual OTA control
- * - Button-triggered provisioning
+ * - Button-triggered re-provisioning
  * - Conditional update acceptance
  * - Custom log handler
  * - Separate check and apply workflow
+ * - Rollback detection via wasRolledBack()
+ *
+ * Required Libraries (install via Arduino Library Manager):
+ * - SafeGithubOTA
+ * - WiFiManager by tzapu
  *
  * Serial Commands:
  *   check    - Check for available updates
@@ -21,18 +27,21 @@
  */
 
 #include <WiFi.h>
+#include <WiFiManager.h>
 #include <SafeGithubOTA.h>
+
+// Increase loop task stack for TLS operations (default 8KB is not enough)
+SET_LOOP_TASK_STACK_SIZE(16 * 1024);
 
 // ---- Configuration ----
 const char* FW_VERSION = "2.0.0";
-const char* WIFI_SSID = "YourWiFiSSID";
-const char* WIFI_PASS = "YourWiFiPassword";
 
-// Optional: GPIO pin for provisioning button
-const int PROVISION_BUTTON_PIN = 0;   // GPIO0 (BOOT button on many boards)
-const int PROVISION_HOLD_MS = 3000;   // Hold for 3 seconds
+// GPIO pin for re-provisioning button (GPIO0 = BOOT button on many boards)
+const int PROVISION_BUTTON_PIN = 0;
+const int PROVISION_HOLD_MS = 3000;   // Hold for 3 seconds to trigger
 
 SafeGithubOTA ota;
+WiFiManager wifiManager;
 
 void setup() {
     Serial.begin(115200);
@@ -46,7 +55,7 @@ void setup() {
 
     ota.setVersion(FW_VERSION);
 
-    // Custom log handler - prefix with timestamp
+    // Custom log handler - prefix with uptime
     ota.onLog([](const char* msg) {
         Serial.printf("[OTA %lu] %s\n", millis() / 1000, msg);
     });
@@ -63,7 +72,7 @@ void setup() {
             return false;
         }
 
-        // Example: Only update if WiFi signal is strong
+        // Example: Only update if WiFi signal is strong enough for reliable download
         if (WiFi.RSSI() < -80) {
             Serial.println("Skipping: WiFi signal too weak for OTA");
             return false;
@@ -73,12 +82,11 @@ void setup() {
         return true;
     });
 
-    // Progress callback - show download progress
+    // Progress callback - show download progress bar
     ota.onProgress([](uint32_t written, uint32_t total) {
         static uint32_t lastPct = 999;
         uint32_t pct = total > 0 ? (written * 100) / total : 0;
         if (pct != lastPct) {
-            // Print a simple progress bar
             Serial.printf("\rFlashing: [");
             int bars = pct / 5;
             for (int i = 0; i < 20; i++) {
@@ -90,7 +98,8 @@ void setup() {
         }
     });
 
-    // Validation callback - thorough hardware check
+    // Validation callback - verify hardware after OTA update.
+    // Runs on first boot after OTA. Return false to rollback.
     ota.onValidation([]() -> bool {
         Serial.println("Running hardware validation...");
 
@@ -117,14 +126,13 @@ void setup() {
     // Auto-check every hour
     ota.setAutoCheckInterval(3600);
 
-    // ---- Provisioning ----
+    // ---- OTA Provisioning ----
 
-    // Check for button hold during boot to enter provisioning
     if (!ota.isProvisioned()) {
         Serial.println("No OTA credentials. Starting provisioning portal...");
         ota.startProvisioningPortal("MyDevice-Config", "setup1234", 300);
     } else {
-        // Check if button is held to re-provision
+        // Check if BOOT button is held to re-provision OTA credentials
         Serial.println("Hold BOOT button for 3s to re-provision...");
         uint32_t holdStart = millis();
         bool buttonHeld = false;
@@ -147,28 +155,27 @@ void setup() {
 
     // ---- Connect WiFi ----
 
-    WiFi.begin(WIFI_SSID, WIFI_PASS);
-    Serial.print("Connecting to WiFi");
-    uint32_t wifiStart = millis();
-    while (WiFi.status() != WL_CONNECTED) {
-        if ((millis() - wifiStart) > 30000) {
-            Serial.println("\nWiFi connection failed!");
-            break;
-        }
-        delay(500);
-        Serial.print(".");
-    }
-
-    if (WiFi.status() == WL_CONNECTED) {
-        Serial.printf("\nConnected: %s (RSSI: %d dBm)\n",
+    // WiFiManager handles WiFi configuration via captive portal.
+    // On first boot, creates a "MyDevice-WiFi" AP for configuration.
+    // On subsequent boots, auto-connects to the saved network.
+    wifiManager.setConfigPortalTimeout(300);
+    Serial.println("Connecting to WiFi...");
+    if (!wifiManager.autoConnect("MyDevice-WiFi")) {
+        Serial.println("WiFi connection failed!");
+        // Continue without WiFi - OTA won't work but app may still function
+    } else {
+        Serial.printf("Connected: %s (RSSI: %d dBm)\n",
             WiFi.localIP().toString().c_str(), WiFi.RSSI());
     }
 
     // ---- Initialize OTA ----
 
     SGO_Error err = ota.begin();
-    if (err == SGO_Error::VALIDATION_FAILED) {
-        Serial.println("WARNING: Previous update was rolled back!");
+
+    // Check if device just rolled back from a failed OTA update.
+    // This checks OTA partition state and persists until the next OTA.
+    if (ota.wasRolledBack()) {
+        Serial.println("WARNING: Previous OTA update failed validation and was rolled back!");
     }
 
     Serial.println();
@@ -217,6 +224,7 @@ void loop() {
             } else if (err != SGO_Error::OK) {
                 Serial.printf("Update failed: %s\n", ota.getLastError());
             }
+            // If OK, device is rebooting into new firmware
         }
         else if (cmd == "version") {
             Serial.printf("Firmware: %s\n", ota.getVersion());
@@ -226,8 +234,6 @@ void loop() {
         else if (cmd == "provision") {
             Serial.println("Starting provisioning portal (5 min timeout)...");
             ota.startProvisioningPortal("MyDevice-Config", "setup1234", 300);
-            // Reconnect WiFi after portal closes
-            WiFi.begin(WIFI_SSID, WIFI_PASS);
         }
         else if (cmd == "confirm") {
             SGO_Error err = ota.confirmFirmware();
@@ -241,13 +247,15 @@ void loop() {
         }
         else if (cmd == "clear") {
             ota.clearCredentials();
-            Serial.println("Credentials cleared.");
+            Serial.println("OTA credentials cleared.");
         }
         else if (cmd == "status") {
             Serial.printf("Version: %s\n", ota.getVersion());
             Serial.printf("Provisioned: %s\n", ota.isProvisioned() ? "yes" : "no");
             Serial.printf("Pending verification: %s\n",
                 ota.isPendingVerification() ? "yes" : "no");
+            Serial.printf("Rolled back: %s\n",
+                ota.wasRolledBack() ? "yes" : "no");
             Serial.printf("WiFi: %s (RSSI: %d)\n",
                 WiFi.status() == WL_CONNECTED ? "connected" : "disconnected",
                 WiFi.RSSI());

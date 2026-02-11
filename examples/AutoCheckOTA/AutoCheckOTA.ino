@@ -1,35 +1,45 @@
 /*
- * SafeGithubOTA - Auto-Check Example
+ * SafeGithubOTA - Auto-Check with WiFiManager Example
  *
  * Demonstrates:
+ * - WiFiManager for easy WiFi configuration (no hardcoded credentials)
  * - Automatic periodic update checks (configurable interval)
  * - Custom validation callback for rollback protection
  * - Progress reporting during download
+ * - Rollback detection via wasRolledBack()
+ *
+ * Required Libraries (install via Arduino Library Manager):
+ * - SafeGithubOTA
+ * - WiFiManager by tzapu
  *
  * The device checks for updates at a regular interval while running.
- * After an OTA update, the validation callback runs to verify the
- * new firmware is working correctly before confirming it.
+ * After an OTA update, the validation callback verifies the new firmware
+ * is working correctly before confirming it. If validation fails, the
+ * ESP32 bootloader automatically reverts to the previous firmware.
  */
 
 #include <WiFi.h>
+#include <WiFiManager.h>
 #include <SafeGithubOTA.h>
+
+// Increase loop task stack for TLS operations (default 8KB is not enough)
+SET_LOOP_TASK_STACK_SIZE(16 * 1024);
 
 // ---- Configuration ----
 const char* FW_VERSION = "1.0.0";
-const char* WIFI_SSID = "YourWiFiSSID";
-const char* WIFI_PASS = "YourWiFiPassword";
 
 SafeGithubOTA ota;
+WiFiManager wifiManager;
 
 // Validation callback - runs on first boot after OTA update.
 // Return true if the new firmware is working correctly.
-// Return false to rollback to the previous firmware.
+// Return false to automatically rollback to the previous firmware.
 bool validateFirmware() {
     Serial.println("Running post-OTA validation...");
 
     // Example checks you might perform:
 
-    // 1. Verify WiFi still works
+    // 1. Verify WiFi is still connected
     if (WiFi.status() != WL_CONNECTED) {
         Serial.println("FAIL: WiFi not connected");
         return false;
@@ -61,12 +71,12 @@ void setup() {
     Serial.println();
     Serial.printf("=== SafeGithubOTA Auto-Check Example (v%s) ===\n", FW_VERSION);
 
-    // Configure OTA
+    // Configure OTA before begin()
     ota.setVersion(FW_VERSION);
 
-    // Set the validation callback - this is critical for rollback protection.
-    // If the new firmware fails validation, the ESP32 will automatically
-    // revert to the previous working firmware on the next reboot.
+    // Set the validation callback for rollback protection.
+    // After an OTA update, this runs on first boot. If it returns false,
+    // the ESP32 bootloader automatically reverts to the previous firmware.
     ota.onValidation(validateFirmware);
 
     // Set progress callback for download status
@@ -82,35 +92,43 @@ void setup() {
     // Auto-check for updates every 6 hours
     ota.setAutoCheckInterval(6 * 60 * 60);
 
-    // Provisioning (developer-only, before shipping)
+    // Provisioning (developer-only, before shipping the device)
     if (!ota.isProvisioned()) {
-        Serial.println("Starting provisioning portal...");
+        Serial.println("OTA not provisioned. Starting setup portal...");
+        Serial.println("Connect to WiFi: MyDevice-Setup");
         ota.startProvisioningPortal("MyDevice-Setup");
     }
 
-    // Connect to WiFi
-    WiFi.begin(WIFI_SSID, WIFI_PASS);
-    Serial.print("Connecting to WiFi");
-    while (WiFi.status() != WL_CONNECTED) {
-        delay(500);
-        Serial.print(".");
+    // Connect to WiFi using WiFiManager.
+    // On first boot, creates a "MyDevice-WiFi" AP for WiFi configuration.
+    // On subsequent boots, auto-connects to the saved network.
+    wifiManager.setConfigPortalTimeout(300);
+    Serial.println("Connecting to WiFi...");
+    if (!wifiManager.autoConnect("MyDevice-WiFi")) {
+        Serial.println("WiFi connection failed! Restarting...");
+        delay(3000);
+        ESP.restart();
     }
-    Serial.printf("\nConnected: %s\n", WiFi.localIP().toString().c_str());
+    Serial.printf("Connected! IP: %s\n", WiFi.localIP().toString().c_str());
 
-    // Initialize OTA
-    // If this is the first boot after an OTA update, the validation callback
-    // will run here. If it returns false, the device rolls back immediately.
+    // Initialize OTA (must be called after WiFi is connected).
+    // This syncs time via NTP, handles post-OTA validation, and loads
+    // credentials from NVS.
     SGO_Error err = ota.begin();
-    if (err == SGO_Error::VALIDATION_FAILED) {
-        // This code actually runs on the PREVIOUS firmware after rollback
-        Serial.println("Previous OTA update failed validation and was rolled back.");
+
+    // Check if we rolled back from a failed OTA update.
+    // This checks OTA partition state and persists until the next OTA.
+    if (ota.wasRolledBack()) {
+        Serial.println("WARNING: Previous OTA update failed validation and was rolled back!");
     }
 
-    Serial.println("Setup complete. Auto-check is running in the background.");
+    Serial.println("Setup complete. Auto-check running in the background.");
 }
 
 void loop() {
     // IMPORTANT: Call ota.loop() to process the auto-check timer.
+    // When a new version is found, it downloads, flashes, and reboots
+    // automatically.
     ota.loop();
 
     // Your application code goes here
