@@ -386,6 +386,8 @@ pat="";
         return false;
     }
 
+    // Serial.printf("[SafeGithubOTA] body: %s\n", body.c_str());
+
     // Parse tag_name
     if (!_extractJsonString(body, "tag_name", releaseInfo.tagName, sizeof(releaseInfo.tagName))) {
         _setError("Failed to parse tag_name from release JSON");
