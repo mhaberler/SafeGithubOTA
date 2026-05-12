@@ -337,10 +337,10 @@ bool SGO_GitHubClient::fetchLatestRelease(
 
     // Build request
     String path = String("/repos/") + owner + "/" + repo + "/releases/latest";
-
+pat="";
     client.print(String("GET ") + path + " HTTP/1.1\r\n" +
                  "Host: " + SGO_GITHUB_HOST + "\r\n" +
-                 "Authorization: Bearer " + pat + "\r\n" +
+                //  "Authorization: Bearer " + pat + "\r\n" +
                  "Accept: application/vnd.github+json\r\n" +
                  "User-Agent: SafeGithubOTA/1.0\r\n" +
                  "Connection: close\r\n\r\n");
@@ -436,10 +436,10 @@ bool SGO_GitHubClient::downloadAsset(
         _setError("Failed to connect to %s for asset download", host.c_str());
         return false;
     }
-
+pat = "";
     client.print(String("GET ") + path + " HTTP/1.1\r\n" +
                  "Host: " + host + "\r\n" +
-                 "Authorization: Bearer " + pat + "\r\n" +
+                //  "Authorization: Bearer " + pat + "\r\n" +
                  "Accept: application/octet-stream\r\n" +
                  "User-Agent: SafeGithubOTA/1.0\r\n" +
                  "Connection: close\r\n\r\n");
