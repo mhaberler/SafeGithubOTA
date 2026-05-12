@@ -70,7 +70,7 @@ bool SGO_Provisioning::hasCredentials() {
 
     bool has = prefs.getString(KEY_OWNER, "").length() > 0 &&
                prefs.getString(KEY_REPO, "").length() > 0 &&
-               prefs.getString(KEY_PAT, "").length() > 0 &&
+              //  prefs.getString(KEY_PAT, "").length() > 0 &&
                prefs.getString(KEY_BIN, "").length() > 0;
     prefs.end();
     return has;
