@@ -26,7 +26,8 @@ bool SGO_Provisioning::loadCredentials(SGO_Credentials& creds) {
     prefs.end();
 
     if (owner.length() == 0 || repo.length() == 0 ||
-        pat.length() == 0 || bin.length() == 0) {
+        // pat.length() == 0 ||
+        bin.length() == 0) {
         return false;
     }
 
