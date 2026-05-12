@@ -88,6 +88,9 @@ public:
     // Set download timeout in milliseconds (default: 120000).
     void setDownloadTimeout(uint32_t ms);
 
+    // setPatRequired(false) skips PAT usage for public repos
+    void setPatRequired(bool required);
+
     // ---- Lifecycle ----
 
     // Initialize the library. Loads NVS credentials and handles post-OTA
@@ -163,6 +166,7 @@ private:
     uint32_t _downloadTimeoutMs;
 
     bool     _rolledBack;
+    bool     _patRequired;
 
     // Cached from last checkForUpdate()
     bool     _updateAvailable;

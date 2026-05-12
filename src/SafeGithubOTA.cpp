@@ -13,6 +13,7 @@ SafeGithubOTA::SafeGithubOTA()
     , _connectTimeoutMs(10000)
     , _downloadTimeoutMs(120000)
     , _rolledBack(false)
+    , _patRequired(true)
     , _updateAvailable(false)
     , _assetSize(0)
 {
@@ -58,6 +59,10 @@ void SafeGithubOTA::setConnectTimeout(uint32_t ms) {
 
 void SafeGithubOTA::setDownloadTimeout(uint32_t ms) {
     _downloadTimeoutMs = ms;
+}
+
+void SafeGithubOTA::setPatRequired(bool required) {
+    _patRequired = required;
 }
 
 // ============================================================
