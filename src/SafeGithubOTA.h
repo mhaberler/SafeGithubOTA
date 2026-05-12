@@ -112,7 +112,7 @@ public:
     );
 
     // Check if device has been provisioned.
-    bool isProvisioned() const;
+    bool isProvisioned(bool patRequired = true) const;
 
     // Clear all stored credentials from NVS.
     void clearCredentials();
@@ -149,6 +149,7 @@ public:
     const char* getVersion() const;
     const char* getLastError() const;
     SGO_Error   getLastErrorCode() const;
+    bool getPatRequired() const;
 
 private:
     char _version[24];

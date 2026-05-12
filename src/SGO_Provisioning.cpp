@@ -10,7 +10,7 @@ const char* SGO_Provisioning::KEY_REPO = "repo";
 const char* SGO_Provisioning::KEY_PAT = "pat";
 const char* SGO_Provisioning::KEY_BIN = "bin";
 
-bool SGO_Provisioning::loadCredentials(SGO_Credentials& creds) {
+bool SGO_Provisioning::loadCredentials(SGO_Credentials& creds, bool patRequired) {
     memset(&creds, 0, sizeof(creds));
     creds.valid = false;
 
@@ -26,7 +26,7 @@ bool SGO_Provisioning::loadCredentials(SGO_Credentials& creds) {
     prefs.end();
 
     if (owner.length() == 0 || repo.length() == 0 ||
-        // pat.length() == 0 ||
+        (patRequired && pat.length() == 0),
         bin.length() == 0) {
         return false;
     }
@@ -63,7 +63,7 @@ void SGO_Provisioning::clearCredentials() {
     }
 }
 
-bool SGO_Provisioning::hasCredentials() {
+bool SGO_Provisioning::hasCredentials(bool patRequired) {
     Preferences prefs;
     if (!prefs.begin(NVS_NAMESPACE, true)) {
         return false;
@@ -71,7 +71,7 @@ bool SGO_Provisioning::hasCredentials() {
 
     bool has = prefs.getString(KEY_OWNER, "").length() > 0 &&
                prefs.getString(KEY_REPO, "").length() > 0 &&
-              //  prefs.getString(KEY_PAT, "").length() > 0 &&
+               (patRequired ? (prefs.getString(KEY_PAT, "").length() > 0) : true) &&
                prefs.getString(KEY_BIN, "").length() > 0;
     prefs.end();
     return has;
@@ -182,7 +182,7 @@ static const char SGO_PORTAL_HTML[] PROGMEM = R"rawliteral(
         <input name="repo" placeholder="e.g. my-firmware" required maxlength="63">
 
         <label>Personal Access Token</label>
-        <input name="pat" type="password" placeholder="ghp_xxxxxxxxxxxx"  maxlength="127">
+        <input name="pat" type="password" placeholder="ghp_xxxxxxxxxxxx" required maxlength="127">
         <div class="hint">Classic PAT needs 'repo' scope; fine-grained needs 'Contents' read</div>
 
         <label>Firmware Filename</label>
@@ -197,6 +197,124 @@ static const char SGO_PORTAL_HTML[] PROGMEM = R"rawliteral(
 </body>
 </html>
 )rawliteral";
+
+// Captive portal HTML form
+static const char SGO_PORTAL_HTML_NO_PAT[] PROGMEM = R"rawliteral(
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SafeGithubOTA Setup</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #1a1a2e;
+      color: #fff;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      padding: 20px;
+    }
+    .container {
+      max-width: 420px;
+      width: 100%;
+      margin-top: 20px;
+    }
+    h2 {
+      text-align: center;
+      color: #4ade80;
+      margin-bottom: 8px;
+      font-size: 1.5rem;
+    }
+    .subtitle {
+      text-align: center;
+      color: #888;
+      font-size: 0.85rem;
+      margin-bottom: 30px;
+    }
+    .card {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 16px;
+      padding: 28px;
+    }
+    label {
+      display: block;
+      margin-top: 18px;
+      font-weight: 600;
+      color: #ccc;
+      font-size: 0.9rem;
+    }
+    label:first-of-type { margin-top: 0; }
+    input {
+      width: 100%;
+      padding: 11px 14px;
+      margin-top: 6px;
+      border: 1px solid #333;
+      border-radius: 8px;
+      background: #16213e;
+      color: #fff;
+      font-size: 0.95rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    input:focus { border-color: #4ade80; }
+    input::placeholder { color: #555; }
+    .hint {
+      font-size: 0.75rem;
+      color: #666;
+      margin-top: 4px;
+    }
+    button {
+      width: 100%;
+      padding: 14px;
+      margin-top: 28px;
+      background: #4ade80;
+      border: none;
+      border-radius: 8px;
+      color: #000;
+      font-weight: 600;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    button:hover { background: #22c55e; }
+    .footer {
+      text-align: center;
+      margin-top: 20px;
+      color: #444;
+      font-size: 0.75rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>SafeGithubOTA</h2>
+    <p class="subtitle">Developer Provisioning Portal</p>
+    <div class="card">
+      <form method="POST" action="/save">
+        <label>Repository Owner</label>
+        <input name="owner" placeholder="e.g. mycompany" required maxlength="63">
+        <div class="hint">GitHub username or organization</div>
+
+        <label>Repository Name</label>
+        <input name="repo" placeholder="e.g. my-firmware" required maxlength="63">
+
+        <label>Firmware Filename</label>
+        <input name="bin" placeholder="e.g. firmware.bin" required maxlength="63">
+        <div class="hint">Must match the .bin asset name in your GitHub Release</div>
+
+        <button type="submit">Save Configuration</button>
+      </form>
+    </div>
+    <p class="footer">SafeGithubOTA &mdash; Secure OTA from GitHub</p>
+  </div>
+</body>
+</html>
+)rawliteral";
+
 
 static const char SGO_PORTAL_SUCCESS_HTML[] PROGMEM = R"rawliteral(
 <!DOCTYPE html>
@@ -241,7 +359,8 @@ static const char SGO_PORTAL_SUCCESS_HTML[] PROGMEM = R"rawliteral(
 bool SGO_Provisioning::launchPortal(
     const char* apSSID,
     const char* apPassword,
-    uint32_t timeoutSeconds
+    uint32_t timeoutSeconds,
+    bool patRequired
 ) {
     // Save current WiFi mode to restore later
     wifi_mode_t previousMode = WiFi.getMode();
@@ -279,12 +398,12 @@ bool SGO_Provisioning::launchPortal(
     volatile bool saved = false;
 
     // Serve the config form
-    server.on("/", HTTP_GET, [&server]() {
-        server.send_P(200, "text/html", SGO_PORTAL_HTML);
+    server.on("/", HTTP_GET, [&server, patRequired]() {
+        server.send_P(200, "text/html", patRequired ? SGO_PORTAL_HTML : SGO_PORTAL_HTML_NO_PAT);
     });
 
     // Handle form submission
-    server.on("/save", HTTP_POST, [&server, &done, &saved]() {
+    server.on("/save", HTTP_POST, [&server, &done, &saved, patRequired]() {
         String owner = server.arg("owner");
         String repo = server.arg("repo");
         String pat = server.arg("pat");
@@ -296,7 +415,7 @@ bool SGO_Provisioning::launchPortal(
         bin.trim();
 
         if (owner.length() == 0 || repo.length() == 0 ||
-            // pat.length() == 0 ||
+            (patRequired && pat.length() == 0) ||
             bin.length() == 0) {
             server.send(400, "text/html",
                 "<html><body style='background:#1a1a2e;color:#f87171;font-family:sans-serif;text-align:center;padding:40px;'>"

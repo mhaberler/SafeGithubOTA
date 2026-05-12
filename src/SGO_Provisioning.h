@@ -14,7 +14,7 @@ struct SGO_Credentials {
 class SGO_Provisioning {
 public:
     // Load credentials from NVS. Returns true if all fields present.
-    static bool loadCredentials(SGO_Credentials& creds);
+    static bool loadCredentials(SGO_Credentials& creds, bool patRequired = true);
 
     // Save credentials to NVS. Returns true on success.
     static bool saveCredentials(const SGO_Credentials& creds);
@@ -23,14 +23,15 @@ public:
     static void clearCredentials();
 
     // Check if credentials exist in NVS.
-    static bool hasCredentials();
+    static bool hasCredentials(bool patRequired = true);
 
     // Launch blocking captive portal AP with config form.
     // Returns true if credentials were saved.
     static bool launchPortal(
         const char* apSSID,
         const char* apPassword,
-        uint32_t timeoutSeconds
+        uint32_t timeoutSeconds,
+        bool patRequired = true
     );
 
 private:
