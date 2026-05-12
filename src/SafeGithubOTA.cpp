@@ -190,8 +190,8 @@ bool SafeGithubOTA::startProvisioningPortal(
     return SGO_Provisioning::launchPortal(apSSID, apPassword, timeoutSeconds, _patRequired);
 }
 
-bool SafeGithubOTA::isProvisioned(bool patRequired) const {
-    return SGO_Provisioning::hasCredentials(patRequired);
+bool SafeGithubOTA::isProvisioned() const {
+    return SGO_Provisioning::hasCredentials(_patRequired);
 }
 
 void SafeGithubOTA::clearCredentials() {

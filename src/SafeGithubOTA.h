@@ -112,7 +112,7 @@ public:
     );
 
     // Check if device has been provisioned.
-    bool isProvisioned(bool patRequired = true) const;
+    bool isProvisioned() const;
 
     // Clear all stored credentials from NVS.
     void clearCredentials();
