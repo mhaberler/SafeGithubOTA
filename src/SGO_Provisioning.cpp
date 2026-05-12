@@ -181,7 +181,7 @@ static const char SGO_PORTAL_HTML[] PROGMEM = R"rawliteral(
         <input name="repo" placeholder="e.g. my-firmware" required maxlength="63">
 
         <label>Personal Access Token</label>
-        <input name="pat" type="password" placeholder="ghp_xxxxxxxxxxxx" required maxlength="127">
+        <input name="pat" type="password" placeholder="ghp_xxxxxxxxxxxx"  maxlength="127">
         <div class="hint">Classic PAT needs 'repo' scope; fine-grained needs 'Contents' read</div>
 
         <label>Firmware Filename</label>
@@ -295,7 +295,8 @@ bool SGO_Provisioning::launchPortal(
         bin.trim();
 
         if (owner.length() == 0 || repo.length() == 0 ||
-            pat.length() == 0 || bin.length() == 0) {
+            // pat.length() == 0 ||
+            bin.length() == 0) {
             server.send(400, "text/html",
                 "<html><body style='background:#1a1a2e;color:#f87171;font-family:sans-serif;text-align:center;padding:40px;'>"
                 "<h2>All fields are required</h2>"
