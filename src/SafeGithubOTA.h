@@ -88,6 +88,14 @@ public:
     // Set download timeout in milliseconds (default: 120000).
     void setDownloadTimeout(uint32_t ms);
 
+    // Set whether a GitHub Personal Access Token is required.
+    // Default: true. Call setPatRequired(false) for PUBLIC repositories:
+    // the provisioning portal then omits the PAT field and no
+    // Authorization header is sent to the GitHub API.
+    // Must be called before begin(), isProvisioned(), or
+    // startProvisioningPortal().
+    void setPatRequired(bool required);
+
     // ---- Lifecycle ----
 
     // Initialize the library. Loads NVS credentials and handles post-OTA
@@ -146,6 +154,7 @@ public:
     const char* getVersion() const;
     const char* getLastError() const;
     SGO_Error   getLastErrorCode() const;
+    bool        getPatRequired() const;
 
 private:
     char _version[24];
@@ -163,6 +172,7 @@ private:
     uint32_t _downloadTimeoutMs;
 
     bool     _rolledBack;
+    bool     _patRequired;
 
     // Cached from last checkForUpdate()
     bool     _updateAvailable;

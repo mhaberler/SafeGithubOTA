@@ -13,6 +13,7 @@ SafeGithubOTA::SafeGithubOTA()
     , _connectTimeoutMs(10000)
     , _downloadTimeoutMs(120000)
     , _rolledBack(false)
+    , _patRequired(true)
     , _updateAvailable(false)
     , _assetSize(0)
 {
@@ -58,6 +59,10 @@ void SafeGithubOTA::setConnectTimeout(uint32_t ms) {
 
 void SafeGithubOTA::setDownloadTimeout(uint32_t ms) {
     _downloadTimeoutMs = ms;
+}
+
+void SafeGithubOTA::setPatRequired(bool required) {
+    _patRequired = required;
 }
 
 // ============================================================
@@ -138,7 +143,7 @@ SGO_Error SafeGithubOTA::begin() {
     _lastCheckMs = millis();
 
     // Check provisioning status
-    if (!SGO_Provisioning::hasCredentials()) {
+    if (!SGO_Provisioning::hasCredentials(_patRequired)) {
         _log("No OTA credentials configured");
         return _setError(SGO_Error::NOT_PROVISIONED, "No OTA credentials. Call startProvisioningPortal().");
     }
@@ -182,11 +187,11 @@ bool SafeGithubOTA::startProvisioningPortal(
     uint32_t timeoutSeconds
 ) {
     _log("Starting provisioning portal (SSID: %s)", apSSID);
-    return SGO_Provisioning::launchPortal(apSSID, apPassword, timeoutSeconds);
+    return SGO_Provisioning::launchPortal(apSSID, apPassword, timeoutSeconds, _patRequired);
 }
 
 bool SafeGithubOTA::isProvisioned() const {
-    return SGO_Provisioning::hasCredentials();
+    return SGO_Provisioning::hasCredentials(_patRequired);
 }
 
 void SafeGithubOTA::clearCredentials() {
@@ -211,7 +216,7 @@ SGO_Error SafeGithubOTA::checkForUpdate(SGO_UpdateInfo* info) {
 
     // Load credentials
     SGO_Credentials creds;
-    if (!SGO_Provisioning::loadCredentials(creds)) {
+    if (!SGO_Provisioning::loadCredentials(creds, _patRequired)) {
         return _setError(SGO_Error::NOT_PROVISIONED, "No OTA credentials configured");
     }
 
@@ -259,7 +264,7 @@ SGO_Error SafeGithubOTA::applyUpdate() {
 
     // Load credentials for PAT
     SGO_Credentials creds;
-    if (!SGO_Provisioning::loadCredentials(creds)) {
+    if (!SGO_Provisioning::loadCredentials(creds, _patRequired)) {
         return _setError(SGO_Error::NOT_PROVISIONED, "No OTA credentials");
     }
 
@@ -402,4 +407,8 @@ const char* SafeGithubOTA::getLastError() const {
 
 SGO_Error SafeGithubOTA::getLastErrorCode() const {
     return _lastError;
+}
+
+bool SafeGithubOTA::getPatRequired() const {
+    return _patRequired;
 }

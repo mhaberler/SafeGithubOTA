@@ -10,7 +10,7 @@ const char* SGO_Provisioning::KEY_REPO = "repo";
 const char* SGO_Provisioning::KEY_PAT = "pat";
 const char* SGO_Provisioning::KEY_BIN = "bin";
 
-bool SGO_Provisioning::loadCredentials(SGO_Credentials& creds) {
+bool SGO_Provisioning::loadCredentials(SGO_Credentials& creds, bool patRequired) {
     memset(&creds, 0, sizeof(creds));
     creds.valid = false;
 
@@ -26,7 +26,7 @@ bool SGO_Provisioning::loadCredentials(SGO_Credentials& creds) {
     prefs.end();
 
     if (owner.length() == 0 || repo.length() == 0 ||
-        pat.length() == 0 || bin.length() == 0) {
+        (patRequired && pat.length() == 0) || bin.length() == 0) {
         return false;
     }
 
@@ -62,7 +62,7 @@ void SGO_Provisioning::clearCredentials() {
     }
 }
 
-bool SGO_Provisioning::hasCredentials() {
+bool SGO_Provisioning::hasCredentials(bool patRequired) {
     Preferences prefs;
     if (!prefs.begin(NVS_NAMESPACE, true)) {
         return false;
@@ -70,14 +70,16 @@ bool SGO_Provisioning::hasCredentials() {
 
     bool has = prefs.getString(KEY_OWNER, "").length() > 0 &&
                prefs.getString(KEY_REPO, "").length() > 0 &&
-               prefs.getString(KEY_PAT, "").length() > 0 &&
+               (!patRequired || prefs.getString(KEY_PAT, "").length() > 0) &&
                prefs.getString(KEY_BIN, "").length() > 0;
     prefs.end();
     return has;
 }
 
-// Captive portal HTML form
-static const char SGO_PORTAL_HTML[] PROGMEM = R"rawliteral(
+// Captive portal HTML form. Split into three parts so the PAT field can
+// be omitted for public repos without duplicating the markup/CSS:
+//   HEAD + (PAT field, only if patRequired) + TAIL
+static const char SGO_PORTAL_HTML_HEAD[] PROGMEM = R"rawliteral(
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -179,11 +181,17 @@ static const char SGO_PORTAL_HTML[] PROGMEM = R"rawliteral(
 
         <label>Repository Name</label>
         <input name="repo" placeholder="e.g. my-firmware" required maxlength="63">
+)rawliteral";
 
+// PAT field — appended to HEAD only when a Personal Access Token is
+// required (private repos). Omitted via setPatRequired(false).
+static const char SGO_PORTAL_HTML_PAT[] PROGMEM = R"rawliteral(
         <label>Personal Access Token</label>
         <input name="pat" type="password" placeholder="ghp_xxxxxxxxxxxx" required maxlength="127">
         <div class="hint">Classic PAT needs 'repo' scope; fine-grained needs 'Contents' read</div>
+)rawliteral";
 
+static const char SGO_PORTAL_HTML_TAIL[] PROGMEM = R"rawliteral(
         <label>Firmware Filename</label>
         <input name="bin" placeholder="e.g. firmware.bin" required maxlength="63">
         <div class="hint">Must match the .bin asset name in your GitHub Release</div>
@@ -240,7 +248,8 @@ static const char SGO_PORTAL_SUCCESS_HTML[] PROGMEM = R"rawliteral(
 bool SGO_Provisioning::launchPortal(
     const char* apSSID,
     const char* apPassword,
-    uint32_t timeoutSeconds
+    uint32_t timeoutSeconds,
+    bool patRequired
 ) {
     // Save current WiFi mode to restore later
     wifi_mode_t previousMode = WiFi.getMode();
@@ -277,13 +286,17 @@ bool SGO_Provisioning::launchPortal(
     volatile bool done = false;
     volatile bool saved = false;
 
-    // Serve the config form
-    server.on("/", HTTP_GET, [&server]() {
-        server.send_P(200, "text/html", SGO_PORTAL_HTML);
+    // Serve the config form. The PAT field is included only when a
+    // Personal Access Token is required (private repos).
+    server.on("/", HTTP_GET, [&server, patRequired]() {
+        String html = FPSTR(SGO_PORTAL_HTML_HEAD);
+        if (patRequired) html += FPSTR(SGO_PORTAL_HTML_PAT);
+        html += FPSTR(SGO_PORTAL_HTML_TAIL);
+        server.send(200, "text/html", html);
     });
 
     // Handle form submission
-    server.on("/save", HTTP_POST, [&server, &done, &saved]() {
+    server.on("/save", HTTP_POST, [&server, &done, &saved, patRequired]() {
         String owner = server.arg("owner");
         String repo = server.arg("repo");
         String pat = server.arg("pat");
@@ -295,7 +308,7 @@ bool SGO_Provisioning::launchPortal(
         bin.trim();
 
         if (owner.length() == 0 || repo.length() == 0 ||
-            pat.length() == 0 || bin.length() == 0) {
+            (patRequired && pat.length() == 0) || bin.length() == 0) {
             server.send(400, "text/html",
                 "<html><body style='background:#1a1a2e;color:#f87171;font-family:sans-serif;text-align:center;padding:40px;'>"
                 "<h2>All fields are required</h2>"

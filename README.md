@@ -1,14 +1,14 @@
 # SafeGithubOTA
 
-Safe OTA firmware updates from GitHub private repositories for ESP32.
+Safe OTA firmware updates from GitHub releases for ESP32 — public or private repositories.
 
 SafeGithubOTA lets your ESP32 devices check for new firmware releases on GitHub, download and flash them over-the-air, and automatically roll back to the previous version if the new firmware fails a validation check. It works with both public and private repositories.
 
 ## Features
 
-- **GitHub Private Repo Support** — Downloads firmware binaries from private GitHub releases using a Personal Access Token (PAT)
+- **Public & Private Repo Support** — Downloads firmware binaries from GitHub releases. Private repos use a Personal Access Token (PAT); public repos need no token at all (`setPatRequired(false)`)
 - **Automatic Rollback Protection** — If new firmware fails your validation callback, the ESP32 bootloader automatically reverts to the previous working version
-- **Captive Portal Provisioning** — Built-in WiFi AP with a web form for entering GitHub repo details and PAT. Credentials are stored in NVS (non-volatile storage)
+- **Captive Portal Provisioning** — Built-in WiFi AP with a web form for entering GitHub repo details (and a PAT for private repos; the PAT field is omitted for public repos). Credentials are stored in NVS (non-volatile storage)
 - **Semantic Version Comparison** — Compares local and remote versions using semver (MAJOR.MINOR.PATCH) to determine if an update is available
 - **Auto-Check Timer** — Configurable periodic update checks (e.g., every 6 hours) that run in the background
 - **Callbacks** — Optional callbacks for validation, progress reporting, update gating, and custom logging
@@ -96,10 +96,12 @@ Requires the **ESP32 Arduino Core** (v2.x or v3.x). Tested on:
 
 ## GitHub Setup
 
-1. **Create a GitHub Personal Access Token (PAT)**
-   - Go to GitHub > Settings > Developer settings > Personal access tokens
-   - Create a fine-grained token with `Contents: Read` permission for your repo
-   - Or create a classic token with `repo` scope
+1. **Authentication**
+   - **Public repos:** no token needed. Call `ota.setPatRequired(false)` before `isProvisioned()`/`startProvisioningPortal()`/`begin()` — the portal skips the PAT field and no `Authorization` header is sent. (Unauthenticated GitHub API requests are rate-limited to 60/hour per IP — fine for boot-time or daily checks.)
+   - **Private repos:** create a GitHub Personal Access Token (PAT)
+     - Go to GitHub > Settings > Developer settings > Personal access tokens
+     - Create a fine-grained token with `Contents: Read` permission for your repo
+     - Or create a classic token with `repo` scope
 
 2. **Create a GitHub Release**
    - Tag it with a semver version (e.g., `v1.0.0` or `1.0.0`)
@@ -108,6 +110,7 @@ Requires the **ESP32 Arduino Core** (v2.x or v3.x). Tested on:
 3. **Provision your device**
    - On first boot, connect to the device's WiFi AP
    - Enter: repo owner, repo name, PAT, and the `.bin` filename
+   - For public repos (`setPatRequired(false)`), the PAT field is omitted — just enter owner, name, and `.bin` filename
    - Credentials are saved to NVS and persist across reboots
 
 ## API Reference
@@ -124,6 +127,7 @@ Requires the **ESP32 Arduino Core** (v2.x or v3.x). Tested on:
 | `setAutoCheckInterval(uint32_t seconds)` | Set periodic check interval. `0` = disabled (default). Minimum: 60s |
 | `setConnectTimeout(uint32_t ms)` | Connection timeout (default: 10000ms) |
 | `setDownloadTimeout(uint32_t ms)` | Download timeout (default: 120000ms) |
+| `setPatRequired(bool required)` | Set whether a PAT is required. Default: `true`. Pass `false` for **public** repos — the portal omits the PAT field and no auth header is sent |
 
 ### Lifecycle
 
@@ -205,13 +209,14 @@ If the callback returns `false` (or the device crashes before `begin()` runs), t
 
 - **NTP time sync** is performed during `begin()` because TLS certificate validation requires an accurate clock. If WiFi is not connected when `begin()` is called, time sync will be skipped and TLS connections may fail.
 
-- **Credentials are stored in NVS** (ESP32 non-volatile storage) using the Preferences library. They persist across reboots and OTA updates. The PAT is stored in plaintext on the device — treat provisioned devices accordingly.
+- **Credentials are stored in NVS** (ESP32 non-volatile storage) using the Preferences library. They persist across reboots and OTA updates. For private repos the PAT is stored in plaintext on the device — treat provisioned devices accordingly. For public repos (`setPatRequired(false)`) no token is stored.
 
-- **GitHub rate limits** apply: 5,000 requests/hour with a PAT. Daily auto-checks will not come close to this limit.
+- **GitHub rate limits** apply: 5,000 requests/hour with a PAT (private repos), or 60 requests/hour per IP unauthenticated (public repos). Boot-time and daily auto-checks stay well within either limit.
 
 ## Examples
 
 - **[BasicOTA](examples/BasicOTA/BasicOTA.ino)** — Minimal setup with manual update check on boot
+- **[PublicRepoOTA](examples/PublicRepoOTA/PublicRepoOTA.ino)** — Simplest setup for a **public** repo: no PAT, `setPatRequired(false)`
 - **[AutoCheckOTA](examples/AutoCheckOTA/AutoCheckOTA.ino)** — Periodic background checks with WiFiManager and validation callback
 - **[AdvancedOTA](examples/AdvancedOTA/AdvancedOTA.ino)** — Full-featured with serial commands, all callbacks, button re-provisioning, and WiFiManager
 

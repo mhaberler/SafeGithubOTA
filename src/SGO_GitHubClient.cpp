@@ -338,12 +338,17 @@ bool SGO_GitHubClient::fetchLatestRelease(
     // Build request
     String path = String("/repos/") + owner + "/" + repo + "/releases/latest";
 
-    client.print(String("GET ") + path + " HTTP/1.1\r\n" +
-                 "Host: " + SGO_GITHUB_HOST + "\r\n" +
-                 "Authorization: Bearer " + pat + "\r\n" +
-                 "Accept: application/vnd.github+json\r\n" +
-                 "User-Agent: SafeGithubOTA/1.0\r\n" +
-                 "Connection: close\r\n\r\n");
+    // Only send the Authorization header when a PAT is present. Public
+    // repos work without it; private repos still require it.
+    String request = String("GET ") + path + " HTTP/1.1\r\n" +
+                     "Host: " + SGO_GITHUB_HOST + "\r\n";
+    if (pat != nullptr && pat[0] != '\0') {
+        request += String("Authorization: Bearer ") + pat + "\r\n";
+    }
+    request += String("Accept: application/vnd.github+json\r\n") +
+               "User-Agent: SafeGithubOTA/1.0\r\n" +
+               "Connection: close\r\n\r\n";
+    client.print(request);
 
     // Read response
     String headers;
@@ -437,12 +442,17 @@ bool SGO_GitHubClient::downloadAsset(
         return false;
     }
 
-    client.print(String("GET ") + path + " HTTP/1.1\r\n" +
-                 "Host: " + host + "\r\n" +
-                 "Authorization: Bearer " + pat + "\r\n" +
-                 "Accept: application/octet-stream\r\n" +
-                 "User-Agent: SafeGithubOTA/1.0\r\n" +
-                 "Connection: close\r\n\r\n");
+    // Only send the Authorization header when a PAT is present (private
+    // repos). The S3 redirect target below must never receive it.
+    String request = String("GET ") + path + " HTTP/1.1\r\n" +
+                     "Host: " + host + "\r\n";
+    if (pat != nullptr && pat[0] != '\0') {
+        request += String("Authorization: Bearer ") + pat + "\r\n";
+    }
+    request += String("Accept: application/octet-stream\r\n") +
+               "User-Agent: SafeGithubOTA/1.0\r\n" +
+               "Connection: close\r\n\r\n";
+    client.print(request);
 
     String headers;
     int statusCode = _readHttpResponse(client, headers, _connectTimeoutMs);

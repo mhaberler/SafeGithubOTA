@@ -30,6 +30,8 @@ onLog	KEYWORD2
 setAutoCheckInterval	KEYWORD2
 setConnectTimeout	KEYWORD2
 setDownloadTimeout	KEYWORD2
+setPatRequired	KEYWORD2
+getPatRequired	KEYWORD2
 confirmFirmware	KEYWORD2
 rollback	KEYWORD2
 isPendingVerification	KEYWORD2
